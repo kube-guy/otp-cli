@@ -1,0 +1,144 @@
+import Foundation
+
+/// RFC 6238 Appendix B 테스트 벡터 및 파싱 검증.
+///
+/// XCTest 는 전체 Xcode 에만 포함되어 Command Line Tools 환경에서는 쓸 수 없다.
+/// 검증을 바이너리 안에 두면 `otp selftest` 로 어디서든, 그리고 `brew test` 에서도
+/// 같은 검사를 돌릴 수 있다.
+public enum SelfTest {
+    public struct Result {
+        public let name: String
+        public let passed: Bool
+        public let detail: String
+    }
+
+    // ASCII "12345678901234567890" 을 알고리즘별 키 길이만큼 반복한 값
+    private static let sha1Secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+    private static let sha256Secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA"
+    private static let sha512Secret =
+        "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+
+    private static let vectors: [(time: TimeInterval, sha1: String, sha256: String, sha512: String)] = [
+        (59, "94287082", "46119246", "90693936"),
+        (1111111109, "07081804", "68084774", "25091201"),
+        (1111111111, "14050471", "67062674", "99943326"),
+        (1234567890, "89005924", "91819424", "93441116"),
+        (2000000000, "69279037", "90698825", "38618901"),
+        (20000000000, "65353130", "77737706", "47863826"),
+    ]
+
+    private static func code(
+        _ secret: String, _ algorithm: OTPAlgorithm, at seconds: TimeInterval, digits: Int = 8
+    ) throws -> String {
+        let totp = try TOTP(
+            secret: Base32.decode(secret), digits: digits, period: 30, algorithm: algorithm)
+        return totp.code(at: Date(timeIntervalSince1970: seconds))
+    }
+
+    public static func run() -> [Result] {
+        var results: [Result] = []
+
+        func check(_ name: String, _ body: () throws -> String?) {
+            do {
+                if let failure = try body() {
+                    results.append(Result(name: name, passed: false, detail: failure))
+                } else {
+                    results.append(Result(name: name, passed: true, detail: ""))
+                }
+            } catch {
+                results.append(Result(name: name, passed: false, detail: "예외: \(error)"))
+            }
+        }
+
+        for (algorithm, secret, expected) in [
+            (OTPAlgorithm.sha1, sha1Secret, vectors.map(\.sha1)),
+            (OTPAlgorithm.sha256, sha256Secret, vectors.map(\.sha256)),
+            (OTPAlgorithm.sha512, sha512Secret, vectors.map(\.sha512)),
+        ] {
+            check("RFC 6238 \(algorithm.rawValue) 벡터 6건") {
+                for (index, vector) in vectors.enumerated() {
+                    let got = try code(secret, algorithm, at: vector.time)
+                    if got != expected[index] {
+                        return "t=\(Int(vector.time)) 기대 \(expected[index]) 실제 \(got)"
+                    }
+                }
+                return nil
+            }
+        }
+
+        check("6자리는 8자리 벡터의 하위 6자리") {
+            let got = try code(sha1Secret, .sha1, at: 59, digits: 6)
+            return got == "287082" ? nil : "기대 287082 실제 \(got)"
+        }
+
+        check("남은 시간 계산") {
+            let totp = try TOTP(secret: Base32.decode(sha1Secret))
+            let cases: [(TimeInterval, Int)] = [(0, 30), (29, 1), (30, 30)]
+            for (time, want) in cases {
+                let got = totp.secondsRemaining(at: Date(timeIntervalSince1970: time))
+                if got != want { return "t=\(Int(time)) 기대 \(want) 실제 \(got)" }
+            }
+            return nil
+        }
+
+        check("Base32 공백·하이픈·소문자·패딩 허용") {
+            let plain = try Base32.decode("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ")
+            let messy = try Base32.decode("gezd gnbv gy3t qojq-GEZD-GNBV-GY3T-QOJQ==")
+            return plain == messy ? nil : "정규화 결과가 다릅니다"
+        }
+
+        check("Base32 잘못된 입력 거부") {
+            if (try? Base32.decode("GEZD1NBV")) != nil { return "'1' 을 통과시킴" }
+            if (try? Base32.decode("")) != nil { return "빈 문자열을 통과시킴" }
+            return nil
+        }
+
+        check("digits·period 범위 검증") {
+            let secret = try Base32.decode(sha1Secret)
+            if (try? TOTP(secret: secret, digits: 5)) != nil { return "digits=5 를 통과시킴" }
+            if (try? TOTP(secret: secret, digits: 9)) != nil { return "digits=9 를 통과시킴" }
+            if (try? TOTP(secret: secret, period: 0)) != nil { return "period=0 을 통과시킴" }
+            return nil
+        }
+
+        check("otpauth URI 파싱") {
+            let uri = "otpauth://totp/GitLab:1112384?secret=\(sha1Secret)"
+                + "&issuer=GitLab&digits=6&period=30&algorithm=SHA1"
+            let parsed = try Account.parse(uri: uri)
+            guard parsed.name == "1112384" else { return "이름 파싱 실패: \(parsed.name ?? "nil")" }
+            guard parsed.account.issuer == "GitLab" else { return "issuer 파싱 실패" }
+            guard parsed.account.digits == 6, parsed.account.period == 30 else { return "파라미터 파싱 실패" }
+            return nil
+        }
+
+        check("otpauth 기본값 적용") {
+            let parsed = try Account.parse(uri: "otpauth://totp/plain?secret=\(sha1Secret)")
+            let a = parsed.account
+            return (a.digits == 6 && a.period == 30 && a.algorithm == .sha1)
+                ? nil : "기본값이 6/30/SHA1 이 아님"
+        }
+
+        check("HOTP·잘못된 scheme·secret 누락 거부") {
+            if (try? Account.parse(uri: "otpauth://hotp/x?secret=\(sha1Secret)&counter=1")) != nil {
+                return "HOTP 를 통과시킴"
+            }
+            if (try? Account.parse(uri: "https://example.com/?secret=\(sha1Secret)")) != nil {
+                return "https scheme 을 통과시킴"
+            }
+            if (try? Account.parse(uri: "otpauth://totp/x")) != nil { return "secret 없는 URI 를 통과시킴" }
+            return nil
+        }
+
+        check("Keychain 저장 형식 왕복") {
+            let account = Account(
+                secret: sha1Secret, digits: 8, period: 60, algorithm: .sha256, issuer: "X")
+            let restored = try Account.decode(account.encoded())
+            guard restored.secret == account.secret, restored.digits == 8,
+                  restored.period == 60, restored.algorithm == .sha256, restored.issuer == "X"
+            else { return "복원된 값이 다릅니다" }
+            return nil
+        }
+
+        return results
+    }
+}
