@@ -139,6 +139,17 @@ public enum SelfTest {
             return nil
         }
 
+        check("단축키 문자열 파싱") {
+            let combo = try HotKey.parse("cmd+opt+o")
+            guard combo.keyCode == 31 else { return "keyCode 가 31(o) 이 아님: \(combo.keyCode)" }
+            guard combo.display == "⌘⌥O" else { return "표시 문자열: \(combo.display)" }
+            if (try? HotKey.parse("o")) != nil { return "수정키 없는 조합을 통과시킴" }
+            if (try? HotKey.parse("cmd+opt")) != nil { return "일반 키 없는 조합을 통과시킴" }
+            if (try? HotKey.parse("cmd+오")) != nil { return "없는 키를 통과시킴" }
+            if (try? HotKey.parse("cmd+a+b")) != nil { return "일반 키 두 개를 통과시킴" }
+            return nil
+        }
+
         return results
     }
 }

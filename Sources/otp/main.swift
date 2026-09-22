@@ -4,12 +4,18 @@ import Foundation
 
 let version = "0.1.0"
 
+// brew services 로그처럼 파일로 리다이렉트되면 stdout 이 블록 버퍼링이라
+// 상주 모드(agent)의 안내가 한참 뒤에야 보인다. 줄 단위로 내보낸다.
+setvbuf(stdout, nil, _IOLBF, 0)
+
 func usage() -> String {
     """
     usage: otp <이름> [--copy] [--watch]
            otp add <이름> [otpauth:// URI]
            otp list
            otp remove <이름>
+           otp agent [--hotkey <조합>] [--account <이름>]
+           otp default [<이름>]
 
     TOTP(RFC 6238) 코드를 생성합니다. 시크릿은 macOS Keychain 에 저장됩니다.
 
@@ -18,11 +24,15 @@ func usage() -> String {
       add <이름> [URI]    시크릿을 등록합니다. URI 를 생략하면 화면에 표시하지 않고 입력받습니다
       list                등록된 이름을 나열합니다
       selftest            RFC 6238 테스트 벡터로 코드 생성이 맞는지 검증합니다
+      agent               단축키를 기다리다 포커스된 입력란에 코드를 타이핑합니다
+      default [<이름>]     단축키가 쓸 기본 계정을 보거나 지정합니다
       remove <이름>       등록을 삭제합니다
 
     옵션:
       -c, --copy          코드를 클립보드에 복사합니다
       -w, --watch         남은 시간과 함께 계속 갱신해 표시합니다 (Ctrl+C 로 종료)
+      --hotkey <조합>     agent 가 쓸 단축키 (기본 cmd+opt+o). 예: "ctrl+shift+9"
+      --account <이름>    agent 가 쓸 계정을 이번 실행에만 지정합니다
       -v, --version       버전을 출력합니다
       -h, --help          이 도움말을 출력합니다
 
@@ -30,6 +40,8 @@ func usage() -> String {
       otp add gitlab                          시크릿을 붙여넣어 등록
       otp add gitlab "otpauth://totp/..."     QR 에서 얻은 URI 로 등록
       otp gitlab --copy                       코드를 클립보드로
+      otp default gitlab                      단축키가 쓸 기본 계정 지정
+      brew services start otp                 단축키 대기를 로그인 시 자동 실행
     """
 }
 
@@ -156,14 +168,30 @@ func commandCode(name: String, copy: Bool, watch: Bool) throws {
 var arguments = Array(CommandLine.arguments.dropFirst())
 var copy = false
 var watch = false
+var hotKeyText = Settings.hotKey
+var accountOverride: String?
 
-arguments = arguments.filter { argument in
+var filtered: [String] = []
+var index = 0
+while index < arguments.count {
+    let argument = arguments[index]
     switch argument {
-    case "-c", "--copy": copy = true; return false
-    case "-w", "--watch": watch = true; return false
-    default: return true
+    case "-c", "--copy":
+        copy = true
+    case "-w", "--watch":
+        watch = true
+    case "--hotkey", "--account":
+        guard index + 1 < arguments.count else {
+            fail("\(argument) 에 값이 필요합니다.")
+        }
+        index += 1
+        if argument == "--hotkey" { hotKeyText = arguments[index] } else { accountOverride = arguments[index] }
+    default:
+        filtered.append(argument)
     }
+    index += 1
 }
+arguments = filtered
 
 guard let first = arguments.first else {
     print(usage())
@@ -181,6 +209,20 @@ do {
         try commandAdd(arguments: rest)
     case "list", "ls":
         commandList()
+    case "agent":
+        try Agent.run(hotKeyText: hotKeyText, accountOverride: accountOverride)
+    case "default":
+        if let name = rest.first {
+            guard Keychain.names().contains(name) else {
+                throw OTPError("'\(name)' 이(가) 등록되어 있지 않습니다.")
+            }
+            Settings.defaultAccount = name
+            print("기본 계정: \(name)")
+        } else if let current = Settings.defaultAccount {
+            print(current)
+        } else {
+            print("기본 계정이 지정되어 있지 않습니다. `otp default <이름>` 으로 지정하세요.")
+        }
     case "selftest":
         let results = SelfTest.run()
         for result in results {
