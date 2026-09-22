@@ -38,3 +38,14 @@ public enum Settings {
         return names[0]
     }
 }
+
+extension Settings {
+    /// 선택 목록에 보여줄 순서. 기본 계정을 맨 위로 올려 숫자키 1 이 되게 한다.
+    public static func orderedForPicker(names: [String], defaultName: String?) -> [String] {
+        guard let defaultName, let index = names.firstIndex(of: defaultName) else { return names }
+        var ordered = names
+        ordered.remove(at: index)
+        ordered.insert(defaultName, at: 0)
+        return ordered
+    }
+}

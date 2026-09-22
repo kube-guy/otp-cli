@@ -150,6 +150,22 @@ public enum SelfTest {
             return nil
         }
 
+        check("선택 목록 정렬 — 기본 계정이 맨 앞") {
+            let names = ["aws", "gitlab", "vpn"]
+            let ordered = Settings.orderedForPicker(names: names, defaultName: "vpn")
+            guard ordered == ["vpn", "aws", "gitlab"] else { return "결과: \(ordered)" }
+            guard Settings.orderedForPicker(names: names, defaultName: nil) == names else {
+                return "기본 계정이 없을 때 순서가 바뀜"
+            }
+            guard Settings.orderedForPicker(names: names, defaultName: "없는이름") == names else {
+                return "없는 기본 계정에서 순서가 바뀜"
+            }
+            guard Settings.orderedForPicker(names: [], defaultName: "x") == [] else {
+                return "빈 목록 처리 실패"
+            }
+            return nil
+        }
+
         return results
     }
 }

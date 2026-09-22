@@ -2,7 +2,7 @@ import Darwin
 import OTPCore
 import Foundation
 
-let version = "0.2.0"
+let version = "0.3.0"
 
 // brew services 로그처럼 파일로 리다이렉트되면 stdout 이 블록 버퍼링이라
 // 상주 모드(agent)의 안내가 한참 뒤에야 보인다. 줄 단위로 내보낸다.
