@@ -13,8 +13,8 @@ $ otp gitlab
 ## 설치
 
 ```sh
-brew tap kube-guy/ai-usage-bar
-brew trust --formula kube-guy/ai-usage-bar/otp
+brew tap kube-guy/kit
+brew trust --formula kube-guy/kit/otp
 brew install otp
 ```
 
