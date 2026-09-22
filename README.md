@@ -97,10 +97,23 @@ otp agent --account gitlab     # 목록 없이 한 계정만 쓰도록 고정
 단축키를 바꾸려면:
 
 ```sh
-otp agent --hotkey "ctrl+shift+9"
+otp hotkey                    # 현재 설정 보기
+otp hotkey "ctrl+opt+/"       # 변경 (저장됨)
+brew services restart otp     # 실행 중이면 재시작해야 반영
 ```
 
-수정키(cmd/opt/ctrl/shift) 를 최소 하나 포함해야 하고, 다른 앱이 이미 쓰는 조합이면 등록에 실패합니다.
+수정키(cmd/opt/ctrl/shift) 를 최소 하나 포함해야 합니다.
+문자·숫자 외에 `/ - = [ ] ; ' , . \\ \`` 와 `space`, `tab`, `return`, `f1`~`f12` 를 쓸 수 있습니다.
+기호키 쪽이 다른 앱과 덜 겹칩니다.
+
+다른 앱이 이미 쓰는 조합이면 agent 가 등록에 실패하며 그 사실을 알려줍니다.
+
+```
+otp: 단축키 ⌘⌥O 를 등록하지 못했습니다. 다른 앱이 이미 쓰고 있을 수 있습니다.
+```
+
+`--hotkey` 옵션은 그 실행에만 적용되고 저장되지 않습니다. `brew services` 로 띄울 때는
+`otp hotkey` 로 저장한 값이 쓰입니다.
 
 > `brew upgrade` 로 새 버전을 설치하면 실행 파일 경로가 바뀌어 손쉬운 사용 권한을
 > 다시 허용해야 할 수 있습니다. 시스템 설정에서 기존 `otp` 항목을 지우고 다시 추가하세요.

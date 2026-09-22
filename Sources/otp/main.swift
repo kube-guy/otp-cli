@@ -2,7 +2,7 @@ import Darwin
 import OTPCore
 import Foundation
 
-let version = "0.5.0"
+let version = "0.6.0"
 
 // brew services 로그처럼 파일로 리다이렉트되면 stdout 이 블록 버퍼링이라
 // 상주 모드(agent)의 안내가 한참 뒤에야 보인다. 줄 단위로 내보낸다.
@@ -17,6 +17,7 @@ func usage() -> String {
            otp remove <이름>
            otp agent [--hotkey <조합>] [--account <이름>]
            otp default [<이름>]
+           otp hotkey [<조합>]
            otp scan [이미지경로]
 
     TOTP(RFC 6238) 코드를 생성합니다. 시크릿은 macOS Keychain 에 저장됩니다.
@@ -29,6 +30,7 @@ func usage() -> String {
       selftest            RFC 6238 테스트 벡터로 코드 생성이 맞는지 검증합니다
       agent               단축키를 기다리다 포커스된 입력란에 코드를 타이핑합니다
       default [<이름>]     단축키가 쓸 기본 계정을 보거나 지정합니다
+      hotkey [<조합>]      단축키를 보거나 바꿉니다. 예: otp hotkey "ctrl+opt+/"
       rename <옛> <새>    등록된 이름을 바꿉니다
       remove <이름>       등록을 삭제합니다
 
@@ -117,6 +119,19 @@ func commandAdd(arguments: [String]) throws {
     if let issuer = account.issuer { print("  발급자 \(issuer)") }
     print("  지금 코드 \(totp.code())  (확인용 — 서비스에 표시된 값과 같아야 합니다)")
     resolvedName = ""
+}
+
+func commandHotKey(arguments: [String]) throws {
+    guard let text = arguments.first else {
+        let combo = try? HotKey.parse(Settings.hotKey)
+        print("\(Settings.hotKey)\(combo.map { "  (\($0.display))" } ?? "")")
+        return
+    }
+    // 저장 전에 파싱해 잘못된 조합이 들어가지 않게 한다.
+    let combo = try HotKey.parse(text)
+    Settings.hotKey = text
+    print("단축키: \(text)  (\(combo.display))")
+    print("이미 실행 중이면 다시 시작해야 반영됩니다: brew services restart otp")
 }
 
 func commandRename(arguments: [String]) throws {
@@ -276,6 +291,8 @@ do {
         let failed = results.filter { !$0.passed }.count
         print("\(results.count - failed)/\(results.count) 통과")
         if failed > 0 { exit(1) }
+    case "hotkey":
+        try commandHotKey(arguments: rest)
     case "rename", "mv":
         try commandRename(arguments: rest)
     case "remove", "rm", "delete":

@@ -147,6 +147,16 @@ public enum SelfTest {
             if (try? HotKey.parse("cmd+opt")) != nil { return "일반 키 없는 조합을 통과시킴" }
             if (try? HotKey.parse("cmd+오")) != nil { return "없는 키를 통과시킴" }
             if (try? HotKey.parse("cmd+a+b")) != nil { return "일반 키 두 개를 통과시킴" }
+
+            // 문자·숫자는 다른 앱과 겹치기 쉬워 기호키도 받아야 한다
+            for key in ["/", "-", "=", "[", "]", ";", "'", ",", ".", "\\", "`", "space", "f13"] {
+                let combo = try? HotKey.parse("ctrl+opt+\(key)")
+                if key == "f13" {
+                    if combo != nil { return "지원하지 않는 f13 을 통과시킴" }
+                } else if combo == nil {
+                    return "기호키 파싱 실패: \(key)"
+                }
+            }
             return nil
         }
 
