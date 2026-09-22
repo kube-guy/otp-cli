@@ -10,7 +10,13 @@ public enum Settings {
 
     public static var defaultAccount: String? {
         get { defaults.string(forKey: accountKey) }
-        set { defaults.set(newValue, forKey: accountKey) }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: accountKey)
+            } else {
+                defaults.removeObject(forKey: accountKey)
+            }
+        }
     }
 
     public static var hotKey: String {

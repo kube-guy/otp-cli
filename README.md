@@ -31,6 +31,7 @@ otp gitlab                            # 현재 코드
 otp gitlab --copy                     # 코드를 클립보드로
 otp gitlab --watch                    # 남은 시간과 함께 갱신 표시
 otp list                              # 등록된 이름
+otp rename gitlab gitlab-work         # 이름 변경 (설정·기본계정 지정 유지)
 otp remove gitlab
 otp selftest                          # RFC 6238 벡터로 자체 검증
 ```
@@ -56,6 +57,13 @@ otp scan ~/Desktop/qr.png
 
 내보내기 QR 은 한 장에 여러 계정이 들어 있어 한 번에 모두 등록됩니다.
 이름은 issuer 에서 따오고, 같은 이름이 이미 있으면 덮어쓰지 않고 `-2`, `-3` 을 붙입니다.
+
+`otp scan` 은 이름을 issuer 에서 자동으로 만듭니다. 마음에 안 들면 바꾸면 됩니다.
+
+```sh
+otp list
+otp rename amazon-web-services aws
+```
 
 > [경고] QR 을 온라인 QR 리더 사이트에 올리지 마세요. QR 안에는 시크릿이 그대로 들어 있어서,
 > 한 번 넘어가면 상대가 언제든 유효한 코드를 만들 수 있습니다. `otp scan` 은 Vision 프레임워크로

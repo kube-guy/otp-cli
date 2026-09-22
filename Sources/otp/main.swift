@@ -2,7 +2,7 @@ import Darwin
 import OTPCore
 import Foundation
 
-let version = "0.4.0"
+let version = "0.5.0"
 
 // brew services 로그처럼 파일로 리다이렉트되면 stdout 이 블록 버퍼링이라
 // 상주 모드(agent)의 안내가 한참 뒤에야 보인다. 줄 단위로 내보낸다.
@@ -13,6 +13,7 @@ func usage() -> String {
     usage: otp <이름> [--copy] [--watch]
            otp add <이름> [otpauth:// URI]
            otp list
+           otp rename <옛이름> <새이름>
            otp remove <이름>
            otp agent [--hotkey <조합>] [--account <이름>]
            otp default [<이름>]
@@ -28,6 +29,7 @@ func usage() -> String {
       selftest            RFC 6238 테스트 벡터로 코드 생성이 맞는지 검증합니다
       agent               단축키를 기다리다 포커스된 입력란에 코드를 타이핑합니다
       default [<이름>]     단축키가 쓸 기본 계정을 보거나 지정합니다
+      rename <옛> <새>    등록된 이름을 바꿉니다
       remove <이름>       등록을 삭제합니다
 
     옵션:
@@ -117,6 +119,37 @@ func commandAdd(arguments: [String]) throws {
     resolvedName = ""
 }
 
+func commandRename(arguments: [String]) throws {
+    guard arguments.count >= 2 else {
+        throw OTPError("사용법: otp rename <옛이름> <새이름>")
+    }
+    let oldName = arguments[0]
+    let newName = arguments[1].trimmingCharacters(in: .whitespaces)
+
+    guard !newName.isEmpty else { throw OTPError("새 이름이 비어 있습니다.") }
+    guard oldName != newName else { throw OTPError("이름이 같습니다.") }
+
+    let names = Keychain.names()
+    guard names.contains(oldName) else {
+        throw OTPError("'\(oldName)' 이(가) 등록되어 있지 않습니다.")
+    }
+    guard !names.contains(newName) else {
+        throw OTPError("'\(newName)' 이(가) 이미 있습니다. 다른 이름을 쓰거나 먼저 지우세요.")
+    }
+
+    // 새 이름으로 저장이 끝난 뒤에 지운다. 중간에 실패해도 시크릿이 사라지지 않는다.
+    let account = try Keychain.load(name: oldName)
+    try Keychain.save(name: newName, account: account)
+    try Keychain.delete(name: oldName)
+
+    if Settings.defaultAccount == oldName {
+        Settings.defaultAccount = newName
+        print("이름을 바꿨습니다: \(oldName) → \(newName)  (기본 계정도 함께 변경)")
+    } else {
+        print("이름을 바꿨습니다: \(oldName) → \(newName)")
+    }
+}
+
 func commandList() {
     let names = Keychain.names()
     if names.isEmpty {
@@ -131,7 +164,13 @@ func commandRemove(arguments: [String]) throws {
         throw OTPError("삭제할 이름이 필요합니다. 예: otp remove gitlab")
     }
     try Keychain.delete(name: name)
-    print("삭제했습니다: \(name)")
+    // 지운 이름이 기본 계정으로 남으면, 계정이 2개 이상일 때 단축키가 실패한다.
+    if Settings.defaultAccount == name {
+        Settings.defaultAccount = nil
+        print("삭제했습니다: \(name)  (기본 계정 지정도 함께 해제)")
+    } else {
+        print("삭제했습니다: \(name)")
+    }
 }
 
 func commandCode(name: String, copy: Bool, watch: Bool) throws {
@@ -237,6 +276,8 @@ do {
         let failed = results.filter { !$0.passed }.count
         print("\(results.count - failed)/\(results.count) 통과")
         if failed > 0 { exit(1) }
+    case "rename", "mv":
+        try commandRename(arguments: rest)
     case "remove", "rm", "delete":
         try commandRemove(arguments: rest)
     default:
