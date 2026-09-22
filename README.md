@@ -23,6 +23,8 @@ Homebrew 7.0 부터는 서드파티 tap 의 formula 를 쓰려면 `brew trust` �
 ## 사용
 
 ```sh
+otp scan                              # 클립보드의 QR 이미지에서 등록
+otp scan ~/Desktop/qr.png             # 저장한 QR 이미지에서 등록
 otp add gitlab                        # 시크릿을 화면에 표시하지 않고 입력받아 등록
 otp add gitlab "otpauth://totp/..."   # QR 에서 얻은 URI 로 등록
 otp gitlab                            # 현재 코드
@@ -32,6 +34,34 @@ otp list                              # 등록된 이름
 otp remove gitlab
 otp selftest                          # RFC 6238 벡터로 자체 검증
 ```
+
+## 기존 인증 앱에서 옮기기
+
+인증 앱이 QR 로만 내보내는 경우, QR 을 캡처해 `otp scan` 으로 읽으면 됩니다.
+
+```sh
+# ⌃⌘⇧4 로 QR 영역을 클립보드에 캡처한 뒤
+otp scan
+
+# 또는 ⌘⇧4 로 파일에 저장한 뒤
+otp scan ~/Desktop/qr.png
+```
+
+두 형식을 모두 읽습니다.
+
+| QR 종류 | 내용 |
+|---|---|
+| `otpauth://totp/...` | 서비스에서 2FA 를 켤 때 나오는 일반 QR. 계정 1개 |
+| `otpauth-migration://offline?data=...` | Google Authenticator 의 "계정 내보내기" QR. **계정 여러 개가 한 번에** |
+
+내보내기 QR 은 한 장에 여러 계정이 들어 있어 한 번에 모두 등록됩니다.
+이름은 issuer 에서 따오고, 같은 이름이 이미 있으면 덮어쓰지 않고 `-2`, `-3` 을 붙입니다.
+
+> [경고] QR 을 온라인 QR 리더 사이트에 올리지 마세요. QR 안에는 시크릿이 그대로 들어 있어서,
+> 한 번 넘어가면 상대가 언제든 유효한 코드를 만들 수 있습니다. `otp scan` 은 Vision 프레임워크로
+> 이 맥 안에서만 디코드하며 어디에도 전송하지 않습니다.
+
+HOTP(카운터 기반) 계정은 건너뜁니다. 지원 대상이 TOTP 뿐입니다.
 
 ## 단축키로 바로 입력하기
 

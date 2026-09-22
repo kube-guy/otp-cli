@@ -2,7 +2,7 @@ import Darwin
 import OTPCore
 import Foundation
 
-let version = "0.3.0"
+let version = "0.4.0"
 
 // brew services 로그처럼 파일로 리다이렉트되면 stdout 이 블록 버퍼링이라
 // 상주 모드(agent)의 안내가 한참 뒤에야 보인다. 줄 단위로 내보낸다.
@@ -16,12 +16,14 @@ func usage() -> String {
            otp remove <이름>
            otp agent [--hotkey <조합>] [--account <이름>]
            otp default [<이름>]
+           otp scan [이미지경로]
 
     TOTP(RFC 6238) 코드를 생성합니다. 시크릿은 macOS Keychain 에 저장됩니다.
 
     명령:
       <이름>              현재 코드를 출력합니다
       add <이름> [URI]    시크릿을 등록합니다. URI 를 생략하면 화면에 표시하지 않고 입력받습니다
+      scan [경로]          QR 이미지를 읽어 등록합니다. 경로를 생략하면 클립보드에서 읽습니다
       list                등록된 이름을 나열합니다
       selftest            RFC 6238 테스트 벡터로 코드 생성이 맞는지 검증합니다
       agent               단축키를 기다리다 포커스된 입력란에 코드를 타이핑합니다
@@ -39,6 +41,8 @@ func usage() -> String {
     예:
       otp add gitlab                          시크릿을 붙여넣어 등록
       otp add gitlab "otpauth://totp/..."     QR 에서 얻은 URI 로 등록
+      otp scan                                ⌃⌘⇧4 로 캡처한 QR 을 클립보드에서 읽어 등록
+      otp scan ~/Desktop/qr.png               저장한 QR 이미지에서 등록
       otp gitlab --copy                       코드를 클립보드로
       otp default gitlab                      단축키가 쓸 기본 계정 지정
       brew services start otp                 단축키 대기를 로그인 시 자동 실행
@@ -209,6 +213,8 @@ do {
         try commandAdd(arguments: rest)
     case "list", "ls":
         commandList()
+    case "scan":
+        try Scan.run(arguments: rest)
     case "agent":
         try Agent.run(hotKeyText: hotKeyText, accountOverride: accountOverride)
     case "default":

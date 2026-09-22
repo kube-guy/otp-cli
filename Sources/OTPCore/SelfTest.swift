@@ -166,6 +166,63 @@ public enum SelfTest {
             return nil
         }
 
+        check("QR 생성 → 디코드 왕복") {
+            let uri = "otpauth://totp/GitLab:me?secret=\(sha1Secret)&issuer=GitLab&digits=6&period=30"
+            guard let png = QRCode.generate(from: uri) else { return "QR 생성 실패" }
+            let decoded = try QRCode.decode(imageData: png)
+            guard decoded.contains(uri) else { return "디코드 결과가 원본과 다름: \(decoded)" }
+            let parsed = try Account.parse(uri: decoded[0])
+            guard parsed.account.secret == sha1Secret else { return "시크릿이 다름" }
+            return nil
+        }
+
+        check("Google Authenticator 내보내기 파싱") {
+            // OtpParameters { secret=1, name=2, issuer=3, algorithm=4(SHA1), digits=5(SIX), type=6(TOTP) }
+            func lengthDelimited(_ field: UInt8, _ payload: Data) -> Data {
+                var out = Data([(field << 3) | 2, UInt8(payload.count)])
+                out.append(payload)
+                return out
+            }
+            func varint(_ field: UInt8, _ value: UInt8) -> Data {
+                Data([(field << 3) | 0, value])
+            }
+
+            var parameters = Data()
+            parameters.append(lengthDelimited(1, Data("12345678901234567890".utf8)))  // secret
+            parameters.append(lengthDelimited(2, Data("me@example.com".utf8)))        // name
+            parameters.append(lengthDelimited(3, Data("GitLab".utf8)))                // issuer
+            parameters.append(varint(4, 1))  // SHA1
+            parameters.append(varint(5, 1))  // 6자리
+            parameters.append(varint(6, 2))  // TOTP
+
+            let payload = lengthDelimited(1, parameters)
+            let encoded = payload.base64EncodedString()
+                .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+            let entries = try Migration.parse(uri: "otpauth-migration://offline?data=\(encoded)")
+
+            guard entries.count == 1 else { return "계정 수: \(entries.count)" }
+            let entry = entries[0]
+            guard entry.account.secret == sha1Secret else {
+                return "시크릿 복원 실패: \(entry.account.secret)"
+            }
+            guard entry.account.issuer == "GitLab" else { return "issuer: \(entry.account.issuer ?? "nil")" }
+            guard entry.account.digits == 6, entry.account.algorithm == .sha1 else { return "파라미터 불일치" }
+            guard entry.name == "gitlab" else { return "이름 제안: \(entry.name)" }
+
+            // 복원한 시크릿으로 RFC 벡터가 재현되어야 한다
+            let code = try entry.account.totp().code(at: Date(timeIntervalSince1970: 59))
+            guard code == "287082" else { return "복원 시크릿의 코드가 다름: \(code)" }
+            return nil
+        }
+
+        check("내보내기 형식 오류 처리") {
+            if (try? Migration.parse(uri: "otpauth-migration://offline")) != nil { return "data 없는 URI 통과" }
+            if (try? Migration.parse(uri: "otpauth-migration://offline?data=!!!")) != nil { return "잘못된 base64 통과" }
+            guard Migration.isMigrationURI("otpauth-migration://offline?data=x") else { return "형식 판별 실패" }
+            guard !Migration.isMigrationURI("otpauth://totp/x") else { return "일반 URI 를 내보내기로 오인" }
+            return nil
+        }
+
         return results
     }
 }
