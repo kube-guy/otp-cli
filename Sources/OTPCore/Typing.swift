@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import Foundation
 
@@ -39,5 +40,15 @@ public enum Typing {
             // 간격이 없으면 원격 데스크톱 등 일부 대상이 입력을 흘린다.
             if characterDelay > 0 { Thread.sleep(forTimeInterval: characterDelay) }
         }
+    }
+}
+
+extension Typing {
+    /// 손쉬운 사용 권한이 없을 때 쓰는 대체 경로.
+    /// 아무 일도 일어나지 않는 것보다 클립보드에라도 넣어주는 편이 낫다.
+    public static func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 }

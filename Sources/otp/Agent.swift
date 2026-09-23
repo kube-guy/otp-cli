@@ -24,12 +24,13 @@ enum Agent {
         }
 
         if !Typing.isTrusted() {
-            FileHandle.standardError.write(Data("""
-                손쉬운 사용 권한이 없어 코드를 타이핑할 수 없습니다.
-                시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 에서 otp 를 허용한 뒤
-                이 명령을 다시 실행하세요.
-
-                """.utf8))
+            let path = Bundle.main.executablePath ?? "otp"
+            FileHandle.standardError.write(Data(
+                ("손쉬운 사용 권한이 없습니다. 단축키를 누르면 타이핑 대신 클립보드에 복사합니다.\n"
+                    + "타이핑까지 쓰려면 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 에\n"
+                    + "아래 경로를 추가한 뒤 재시작하세요. 기존 otp 항목이 있으면 지우고 다시 추가해야 합니다.\n"
+                    + "  \(path)\n"
+                    + "  brew services restart otp\n\n").utf8))
             _ = Typing.isTrusted(prompt: true)
         }
 
@@ -77,6 +78,20 @@ enum Agent {
             }
 
             let code = try Keychain.load(name: name).totp().code()
+
+            // 권한이 없으면 CGEvent 가 조용히 무시된다. 그대로 두면 단축키를 눌러도
+            // 아무 일이 일어나지 않아 고장으로 보이므로 클립보드로 대체하고 알린다.
+            guard Typing.isTrusted() else {
+                Typing.copyToClipboard(code)
+                NSSound.beep()
+                let path = Bundle.main.executablePath ?? "otp"
+                FileHandle.standardError.write(Data(
+                    ("otp: 손쉬운 사용 권한이 없어 타이핑하지 못했습니다. 코드를 클립보드에 복사했습니다(⌘V).\n"
+                        + "     타이핑까지 쓰려면 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 에\n"
+                        + "     아래 경로를 추가하세요. 기존 otp 항목이 있으면 지우고 다시 추가해야 합니다.\n"
+                        + "       \(path)\n").utf8))
+                return
+            }
             Typing.type(code)
         } catch {
             NSSound.beep()
